@@ -221,6 +221,8 @@ function log(msg, cls){
   logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
 }
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+addEventListener('error', e => log('JS: '+(e.message||e.error), 'er'));
+addEventListener('unhandledrejection', e => log('promise: '+((e.reason&&e.reason.message)||e.reason), 'er'));
 const easeInOut=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 
 /* ============================================================
@@ -709,7 +711,7 @@ window.evtQueue = evtQueue;
 const keyRepeat = new KeyRepeatManager();
 
 let coreState = 'idle';           // idle | booting | running | failed
-let coreLib = null, emuOn = false;
+let coreLib = null, emuOn = false, frontMode = false;
 
 function queueKey(code, down){
   if(coreState !== 'running') return;
@@ -955,7 +957,8 @@ function togglePower(){
     log('питание выключено');
     return;
   }
-  if(!cartridges.length) log('картриджа нет — игру можно выбрать прямо в окне экрана', 'wr');
+  if(!cartridges.length){ log('сначала вставь картридж (.jar)', 'wr'); return; }
+  log('▶ запуск…');
   frontView();
   $('#btnPower').textContent = '⏹ Стоп'; $('#btnPlay2').textContent = '⏹ Стоп';
   log('запускаю Java-ядро…');
