@@ -205,6 +205,7 @@
     <label class="chk"><input type="checkbox" id="setSound" checked> Звук в игре</label>
     <label class="chk"><input type="checkbox" id="setRotate"> Повернуть экран</label>
     <label class="chk"><input type="checkbox" id="setAutofit" checked> Авто-подгонка под игру</label>
+    <label class="chk"><input type="checkbox" id="setAutorot" checked> Авто-поворот консоли</label>
   </div>
   <div class="card">
     <h4>Ядро эмулятора</h4>
@@ -215,6 +216,7 @@
 <div class="hud" id="bottom">
   <span class="hint">ЛКМ — вращать · колесо — зум · кнопки на корпусе кликабельны</span>
   <button class="btn primary" id="btnPlay2">▶ Играть</button>
+  <button class="btn" id="btnRotate">⟲ Повернуть</button>
   <button class="btn" id="btnFront">Вид на экран</button>
   <button class="btn" id="btnEject">Извлечь</button>
 </div>
@@ -862,14 +864,35 @@ function measurePainted(){
 }
 function applyCrop(){
   const w = scrCanvas.width, h = scrCanvas.height;
+  let cw = w, ch = h;
   if(crop && (crop.w < w * 0.94 || crop.h < h * 0.94)){
-    scrTex.repeat.set(crop.w / w, crop.h / h);
-    scrTex.offset.set(0, 1 - crop.h / h);
-    screenMesh.scale.x = glass.scale.x = (crop.w / crop.h) / (SCREEN_W / SCREEN_H);
+    cw = crop.w; ch = crop.h;
+    scrTex.repeat.set(cw / w, ch / h);
+    scrTex.offset.set(0, 1 - ch / h);
   }else{
     scrTex.repeat.set(1, 1); scrTex.offset.set(0, 0);
-    screenMesh.scale.x = glass.scale.x = (w / h) / (SCREEN_W / SCREEN_H);
   }
+  // вписываем кадр игры в рамку экрана, не вылезая за неё
+  const a = cw / ch, box = SCREEN_W / SCREEN_H;
+  let sx, sy;
+  if(a > box){ sx = 1; sy = box / a; } else { sy = 1; sx = a / box; }
+  screenMesh.scale.set(sx, sy, 1);
+  glass.scale.set(sx, sy, 1);
+  // ландшафтная игра — разворачиваем сам корпус, как телефон в руке
+  if($('#setAutorot').checked) setDeviceRot(a > 1.05 ? -Math.PI/2 : 0);
+}
+
+/* поворот устройства */
+let deviceRot = 0, deviceRotTarget = 0;
+function setDeviceRot(r){
+  if(Math.abs(deviceRotTarget - r) < 0.01) return;
+  deviceRotTarget = r;
+  log(r ? 'ландшафтная игра — поворачиваю консоль' : 'портретный режим');
+  frontView();
+}
+function toggleDeviceRot(){
+  $('#setAutorot').checked = false;
+  setDeviceRot(deviceRotTarget ? 0 : -Math.PI/2);
 }
 function startAutofit(){
   if(cropTimer) clearInterval(cropTimer);
@@ -1009,6 +1032,7 @@ function stopCore(){
   emuOn = false; coreState = 'idle';
   if(cropTimer){ clearInterval(cropTimer); cropTimer = null; }
   crop = null;
+  if($('#setAutorot').checked) setDeviceRot(0);
   $('#pad').classList.remove('on');
   screenMode = active ? 'boot' : 'off'; bootT = 2200; ledOff();
   $('#btnPower').textContent = '▶ Играть'; $('#btnPlay2').textContent = '▶ Играть';
@@ -1040,8 +1064,10 @@ function flyTo(pos, target, dur=900){
 function frontView(){
   frontMode = true;
   const fov = camera.fov*Math.PI/180;
-  const dh = (8.6/2)/Math.tan(fov/2);                       // vertical fit
-  const dw = (7.0/2)/(Math.tan(fov/2)*camera.aspect);       // horizontal fit
+  const land = Math.abs(deviceRotTarget) > 0.1;
+  const needH = land ? 7.4 : 8.6, needW = land ? 11.6 : 7.0;
+  const dh = (needH/2)/Math.tan(fov/2);                     // vertical fit
+  const dw = (needW/2)/(Math.tan(fov/2)*camera.aspect);     // horizontal fit
   const d = Math.min(Math.max(dh, dw), 20);
   flyTo(new THREE.Vector3(0, 0.85, d), new THREE.Vector3(0, 0.85, 0));
 }
@@ -1172,6 +1198,7 @@ $('#btnImport').onclick = ()=> $('#file').click();
 $('#file').onchange = e => { handleFiles([...e.target.files]); e.target.value=''; };
 $('#btnEject').onclick = ()=> ejectCartridge();
 $('#btnFront').onclick = ()=> frontView();
+$('#btnRotate').onclick = ()=> toggleDeviceRot();
 function togglePower(){
   if(emuOn){
     setEmu(false);
@@ -1249,6 +1276,8 @@ function tick(now){
     controls.target.lerpVectors(camAnim.ft, camAnim.tt, e);
     if(k>=1) camAnim = null;
   }
+  deviceRot += (deviceRotTarget - deviceRot) * Math.min(1, dt/220);
+  consoleGroup.rotation.z = deviceRot;
   // idle float
   consoleGroup.rotation.y = Math.sin(now/5200)*0.022;
   consoleGroup.position.y = Math.sin(now/3400)*0.030;
