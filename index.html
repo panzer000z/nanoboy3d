@@ -204,6 +204,7 @@
     <label class="chk"><input type="checkbox" id="setFull" checked> Растянуть на весь экран</label>
     <label class="chk"><input type="checkbox" id="setSound" checked> Звук в игре</label>
     <label class="chk"><input type="checkbox" id="setRotate"> Повернуть экран</label>
+    <label class="chk"><input type="checkbox" id="setAutofit" checked> Авто-подгонка под игру</label>
   </div>
   <div class="card">
     <h4>Ядро эмулятора</h4>
@@ -834,6 +835,59 @@ function queuePointer(kind, x, y){
   evtQueue.queueEvent({kind, x:x|0, y:y|0});
 }
 
+/* Многие старые игры рисуют в жёстко зашитой области (176×208 и т.п.),
+   меньшей, чем экран телефона. Находим реально закрашенный прямоугольник
+   и растягиваем его на весь экран консоли. */
+let crop = null, cropTimer = null;
+function measurePainted(){
+  const w = scrCanvas.width, h = scrCanvas.height;
+  if(!w || !h) return null;
+  let d;
+  try{ d = sctx.getImageData(0, 0, w, h).data; }catch(e){ return null; }
+  const c = ((h-1)*w + (w-1)) * 4;                 // цвет «нетронутого» угла
+  const br = d[c], bg = d[c+1], bb = d[c+2];
+  let maxX = -1, maxY = -1;
+  const step = w > 320 ? 2 : 1;
+  for(let y = 0; y < h; y += step){
+    for(let x = 0; x < w; x += step){
+      const i = (y*w + x) * 4;
+      if(Math.abs(d[i]-br) + Math.abs(d[i+1]-bg) + Math.abs(d[i+2]-bb) > 24){
+        if(x > maxX) maxX = x;
+        if(y > maxY) maxY = y;
+      }
+    }
+  }
+  if(maxX < 32 || maxY < 32) return null;
+  return {w: Math.min(w, maxX + 1 + step), h: Math.min(h, maxY + 1 + step)};
+}
+function applyCrop(){
+  const w = scrCanvas.width, h = scrCanvas.height;
+  if(crop && (crop.w < w * 0.94 || crop.h < h * 0.94)){
+    scrTex.repeat.set(crop.w / w, crop.h / h);
+    scrTex.offset.set(0, 1 - crop.h / h);
+    screenMesh.scale.x = glass.scale.x = (crop.w / crop.h) / (SCREEN_W / SCREEN_H);
+  }else{
+    scrTex.repeat.set(1, 1); scrTex.offset.set(0, 0);
+    screenMesh.scale.x = glass.scale.x = (w / h) / (SCREEN_W / SCREEN_H);
+  }
+}
+function startAutofit(){
+  if(cropTimer) clearInterval(cropTimer);
+  crop = null;
+  if(!$('#setAutofit').checked) return;
+  let ticks = 0;
+  cropTimer = setInterval(() => {
+    if(coreState !== 'running'){ return; }
+    const m = measurePainted();
+    if(m && (!crop || m.w * m.h > crop.w * crop.h)){
+      crop = m;
+      applyCrop();
+      log(`авто-подгонка: ${m.w}×${m.h}`, 'ok');
+    }
+    if(++ticks > 12){ clearInterval(cropTimer); cropTimer = null; }
+  }, 2500);
+}
+
 function fitScreen(w, h){
   if(scrCanvas.width !== w || scrCanvas.height !== h){
     scrCanvas.width = w; scrCanvas.height = h;
@@ -845,9 +899,7 @@ function fitScreen(w, h){
     screenMesh.material.map = scrTex;
     screenMesh.material.needsUpdate = true;
   }
-  // keep the game's aspect ratio on the physical screen
-  const want = w/h, have = SCREEN_W/SCREEN_H;
-  screenMesh.scale.x = glass.scale.x = want/have;
+  applyCrop();
 }
 
 async function startCore(){
@@ -871,6 +923,7 @@ async function startCore(){
             fitScreen(w, h);
             coreState = 'running';
             $('#pad').classList.add('on');
+            startAutofit();
             log(`экран игры ${w}×${h}`, 'ok');
           },
           async Java_pl_zb3_freej2me_bridge_shell_Shell_waitForAndDispatchEvents(lib, listener){
@@ -954,6 +1007,8 @@ async function startCore(){
 }
 function stopCore(){
   emuOn = false; coreState = 'idle';
+  if(cropTimer){ clearInterval(cropTimer); cropTimer = null; }
+  crop = null;
   $('#pad').classList.remove('on');
   screenMode = active ? 'boot' : 'off'; bootT = 2200; ledOff();
   $('#btnPower').textContent = '▶ Играть'; $('#btnPlay2').textContent = '▶ Играть';
@@ -1022,7 +1077,8 @@ renderer.domElement.addEventListener('pointerdown', ev=>{
     controls.enabled = false;
   } else if(p.kind==='screen'){
     if(coreState === 'running' && p.uv){
-      queuePointer('pointerpressed', p.uv.x*scrCanvas.width, (1-p.uv.y)*scrCanvas.height);
+      const cw = crop ? crop.w : scrCanvas.width, ch = crop ? crop.h : scrCanvas.height;
+      queuePointer('pointerpressed', p.uv.x*cw, (1-p.uv.y)*ch);
       screenPointer = p.uv;
     } else if(!emuOn) togglePower();
   } else if(p.kind==='cart'){
@@ -1032,7 +1088,8 @@ renderer.domElement.addEventListener('pointerdown', ev=>{
 });
 addEventListener('pointerup', ()=>{
   if(screenPointer){
-    queuePointer('pointerreleased', screenPointer.x*scrCanvas.width, (1-screenPointer.y)*scrCanvas.height);
+    const cw = crop ? crop.w : scrCanvas.width, ch = crop ? crop.h : scrCanvas.height;
+    queuePointer('pointerreleased', screenPointer.x*cw, (1-screenPointer.y)*ch);
     screenPointer = null;
   }
   if(held){
