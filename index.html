@@ -782,19 +782,27 @@ async function startCore(){
       });
       log('Java-VM готова', 'ok');
       log('загружаю ядро FreeJ2ME…');
-      const withTimeout = (p, ms) => Promise.race([p,
-        new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), ms))]);
+      let realJar = false;
       try{
-        coreLib = await withTimeout(cheerpjRunLibrary(cheerpjWebRoot + '/freej2me-web.jar'), 45000);
-      }catch(e1){
-        log('прямая загрузка не удалась ('+e1.message+'), пробую резервную', 'wr');
+        const probe = await fetch('freej2me-web.jar');
+        if(probe.ok){
+          const head = new Uint8Array((await probe.clone().arrayBuffer()).slice(0,2));
+          realJar = (head[0] === 0x50 && head[1] === 0x4B);   // "PK" = настоящий jar
+        }
+      }catch(e){}
+      if(realJar){
+        log('ядро: прямая загрузка (/app)');
+        coreLib = await cheerpjRunLibrary(cheerpjWebRoot + '/freej2me-web.jar');
+      }else{
+        log('ядро: распаковка base64 → /str');
         const r = await fetch('freej2me-web.jar.b64');
-        if(!r.ok) throw new Error('ядро недоступно: ' + e1.message);
-        const bin = atob((await r.text()).replace(/\s+/g,''));
+        if(!r.ok) throw new Error('файл ядра не найден в репозитории');
+        const bin = atob((await r.text()).replace(/\s+/g, ''));
         const bytes = new Uint8Array(bin.length);
-        for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+        for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        log(`ядро распаковано: ${(bytes.length/1024)|0} KB`);
         cheerpOSAddStringFile('/str/freej2me-web.jar', bytes);
-        coreLib = await withTimeout(cheerpjRunLibrary('/str/freej2me-web.jar'), 45000);
+        coreLib = await cheerpjRunLibrary('/str/freej2me-web.jar');
       }
       log('ядро загружено', 'ok');
     }
