@@ -71,6 +71,13 @@
   .kv{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0}
   .kv b{font-weight:600;color:var(--dim);font-family:'Chivo Mono',monospace;font-size:10.5px}
   .kv span{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:62%}
+  .set{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0}
+  .set label{font-family:'Chivo Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:.08em}
+  .set select{background:#1b1e27;color:var(--ink);border:1px solid var(--line);border-radius:7px;
+    padding:5px 7px;font-family:'Chivo Mono',monospace;font-size:11px;flex:1;max-width:130px;cursor:pointer}
+  .chk{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dim);
+    margin:6px 0;cursor:pointer;user-select:none}
+  .chk input{accent-color:var(--acc);cursor:pointer}
   #log{font-family:'Chivo Mono',monospace;font-size:10.5px;line-height:1.55;color:var(--dim);
     max-height:150px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
   #log::-webkit-scrollbar{width:5px}
@@ -183,6 +190,22 @@
     <div class="kv"><b>SIZE</b><span id="iSize">—</span></div>
   </div>
   <div class="card">
+    <h4>Настройки запуска</h4>
+    <div class="set"><label>ЭКРАН</label><select id="setRes">
+      <option>128x128</option><option>128x160</option><option>132x176</option>
+      <option>176x208</option><option>176x220</option><option>208x208</option>
+      <option selected>240x320</option><option>320x240</option><option>240x400</option>
+      <option>352x416</option><option>360x640</option><option>640x360</option><option>480x800</option>
+    </select></div>
+    <div class="set"><label>ТЕЛЕФОН</label><select id="setPhone">
+      <option>Nokia</option><option>SonyEricsson</option><option>Siemens</option>
+      <option>Motorola</option><option>Standard</option>
+    </select></div>
+    <label class="chk"><input type="checkbox" id="setFull" checked> Растянуть на весь экран</label>
+    <label class="chk"><input type="checkbox" id="setSound" checked> Звук в игре</label>
+    <label class="chk"><input type="checkbox" id="setRotate"> Повернуть экран</label>
+  </div>
+  <div class="card">
     <h4>Ядро эмулятора</h4>
     <div id="log"></div>
   </div>
@@ -223,6 +246,28 @@
 
 <input type="file" id="file" accept=".jar,.jad,application/java-archive" multiple hidden>
 
+<script>
+/* jsDelivr отдаёт скрипты воркеров с другого origin, а конструктор Worker это запрещает.
+   Заворачиваем такие скрипты в blob-обёртку на нашем origin. */
+(function(){
+  var Native = window.Worker;
+  if(!Native) return;
+  function Patched(url, opts){
+    var abs;
+    try{ abs = new URL(url, location.href); }catch(e){ return new Native(url, opts); }
+    if(abs.origin === location.origin || abs.protocol === 'blob:')
+      return new Native(url, opts);
+    var isModule = opts && opts.type === 'module';
+    var src = isModule
+      ? 'import ' + JSON.stringify(abs.href) + ';'
+      : 'importScripts(' + JSON.stringify(abs.href) + ');';
+    var burl = URL.createObjectURL(new Blob([src], {type:'text/javascript'}));
+    return new Native(burl, opts);
+  }
+  Patched.prototype = Native.prototype;
+  window.Worker = Patched;
+})();
+</script>
 <script src="https://cjrtnc.leaningtech.com/20260317_2978/loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script type="importmap">
@@ -258,6 +303,32 @@ function log(msg, cls){
   logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
 }
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* мягкий тактильный клик */
+let sfx = null;
+function beep(kind){
+  try{
+    sfx = sfx || new (window.AudioContext || window.webkitAudioContext)();
+    if(sfx.state === 'suspended') sfx.resume();
+    const t = sfx.currentTime;
+    const cfg = {
+      down:{f:520, f2:300, v:0.075, d:0.075, type:'triangle'},
+      up:  {f:760, f2:620, v:0.030, d:0.045, type:'triangle'},
+      ui:  {f:880, f2:660, v:0.035, d:0.055, type:'sine'},
+      cart:{f:180, f2:90,  v:0.130, d:0.190, type:'square'}
+    }[kind] || {f:600,f2:400,v:0.05,d:0.06,type:'sine'};
+    const o = sfx.createOscillator(), g = sfx.createGain(), lp = sfx.createBiquadFilter();
+    lp.type='lowpass'; lp.frequency.setValueAtTime(kind==='cart'?900:2600, t);
+    o.type = cfg.type;
+    o.frequency.setValueAtTime(cfg.f, t);
+    o.frequency.exponentialRampToValueAtTime(cfg.f2, t + cfg.d);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(cfg.v, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + cfg.d);
+    o.connect(lp); lp.connect(g); g.connect(sfx.destination);
+    o.start(t); o.stop(t + cfg.d + 0.02);
+  }catch(e){}
+}
 addEventListener('error', e => log('JS: '+(e.message||e.error), 'er'));
 addEventListener('unhandledrejection', e => log('promise: '+((e.reason&&e.reason.message)||e.reason), 'er'));
 const easeInOut=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
@@ -577,8 +648,9 @@ function insertCartridge(rec){
   const mid  = new THREE.Vector3(0, SLOT_Y + 2.3, SLOT_Z);
   const to   = new THREE.Vector3(0, SLOT_Y + 0.60, SLOT_Z);
   anim = {t:0, dur:1150, from, mid, to, rec, mode:'in'};
+  beep('cart');
   log(`картридж «${rec.info.name}» → слот`, 'ok');
-  renderShelf(); showInfo(rec.info);
+  renderShelf(); showInfo(rec.info); autoSettings(rec.info);
   bootScreen(rec.info);
 }
 function ejectCartridge(silent){
@@ -805,6 +877,7 @@ async function startCore(){
             const KeyEvent = await lib.pl.zb3.freej2me.bridge.shell.KeyEvent;
             const PointerEvent = await lib.pl.zb3.freej2me.bridge.shell.PointerEvent;
             const e = await evtQueue.waitForEvent();
+            if(!e) return;                      // гонка двух ожидающих потоков — событие уже забрали
             if(e.kind === 'keydown')            await listener.keyPressed(await new KeyEvent(...e.args));
             else if(e.kind === 'keyup')         await listener.keyReleased(await new KeyEvent(...e.args));
             else if(e.kind === 'pointerpressed')await listener.pointerPressed(await new PointerEvent(e.x, e.y));
@@ -846,7 +919,7 @@ async function startCore(){
       }
       log('ядро загружено', 'ok');
     }
-    // put the cartridge into the emulator filesystem
+    // кладём картридж в файловую систему эмулятора
     const bytes = new Uint8Array(await active.info.file.arrayBuffer());
     const LauncherUtil = await coreLib.pl.zb3.freej2me.launcher.LauncherUtil;
     const JFile = await coreLib.java.io.File;
@@ -855,10 +928,20 @@ async function startCore(){
     await LauncherUtil.copyJar(new Int8Array(bytes), jarFile);
     log(`картридж записан (${(bytes.length/1024)|0} KB)`, 'ok');
 
+    // устанавливаем как приложение — только так можно задать размер экрана,
+    // тип телефона и полноэкранный режим
+    const st = gameSettings();
+    const MIDletLoader = await coreLib.org.recompile.mobile.MIDletLoader;
+    const loader = await MIDletLoader.getMIDletLoader(jarFile);
+    await LauncherUtil.ensureAppId(loader, (active.info.file.name || 'game.jar'));
+    await LauncherUtil.initApp(jarFile, loader, await kvToJava(st), null, null);
+    const appId = await loader.getAppId();
+    log(`режим: ${st.width}×${st.height}, ${st.phone}, fullscreen=${st.forceFullscreen}`, 'ok');
+
     const FreeJ2ME = await coreLib.org.recompile.freej2me.FreeJ2ME;
     emuOn = true;
     log('запуск игры…', 'ok');
-    FreeJ2ME.main(['jar', '/files/_tmp/game.jar']).catch(async e => {
+    FreeJ2ME.main(['app', appId]).catch(async e => {
       coreState = 'failed';
       try{ await e.printStackTrace(); }catch(_){}
       log('игра завершилась с ошибкой', 'er');
@@ -881,8 +964,8 @@ function positionEmu(){}
 // on-screen keypad -> core
 document.querySelectorAll('#pad .pk').forEach(b => {
   const k = b.dataset.k;
-  const dn = e => { e.preventDefault(); b.classList.add('act'); queueKey(k, true); };
-  const up = e => { e.preventDefault(); b.classList.remove('act'); queueKey(k, false); };
+  const dn = e => { e.preventDefault(); b.classList.add('act'); beep('down'); queueKey(k, true); };
+  const up = e => { e.preventDefault(); b.classList.remove('act'); beep('up'); queueKey(k, false); };
   b.addEventListener('pointerdown', dn);
   b.addEventListener('pointerup', up);
   b.addEventListener('pointerleave', up);
@@ -961,6 +1044,7 @@ addEventListener('pointerup', ()=>{
 });
 function sendKey(code, down){
   if(!code) return;
+  beep(down ? 'down' : 'up');
   queueKey(code, down);
   if(screenMode==='boot' && down) bootT = Math.max(bootT, 2200);
 }
@@ -987,6 +1071,38 @@ function renderShelf(){
   });
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function autoSettings(info){
+  const fn = (info.file?.name || '') + ' ' + info.name;
+  const res = $('#setRes');
+  if(info.res && [...res.options].some(o => o.value === info.res || o.text === info.res)){
+    res.value = info.res;
+  }
+  const l = fn.toLowerCase();
+  const phone = /sony|ericsson|\bse\b|w910|k750/.test(l) ? 'SonyEricsson'
+              : /siemens|\bsl\d|c65/.test(l)            ? 'Siemens'
+              : /motorola|\bv3\b|razr/.test(l)          ? 'Motorola'
+              : 'Nokia';
+  $('#setPhone').value = phone;
+  log(`настройки: ${res.value}, ${phone}`);
+}
+function gameSettings(){
+  const [w, h] = $('#setRes').value.split('x');
+  return {
+    width: w, height: h,
+    phone: $('#setPhone').value,
+    forceFullscreen: $('#setFull').checked ? 'on' : 'off',
+    sound: $('#setSound').checked ? 'on' : 'off',
+    rotate: $('#setRotate').checked ? 'on' : 'off',
+    fps: '0', fontSize: '0', dgFormat: '4444',
+    queuedPaint: 'off', textureDisableFilter: 'off'
+  };
+}
+async function kvToJava(kv){
+  const HashMap = await coreLib.java.util.HashMap;
+  const m = await new HashMap();
+  for(const k of Object.keys(kv)) await m.put(k, String(kv[k]));
+  return m;
+}
 function showInfo(i){
   $('#iName').textContent = i.name || '—';
   $('#iVendor').textContent = i.vendor || '—';
@@ -1051,7 +1167,8 @@ function openHelp(){
       <li>Нажми <b>«Играть»</b> — ядро загрузится и игра пойдёт прямо на экране консоли.</li>
       <li>Играй крестовиной и кнопками A/B на корпусе или с клавиатуры.</li>
     </ol>
-    <p style="color:#8a90a0;font-size:12.5px">Управление в игре: стрелки, <code>Enter</code> — OK,
+    <p style="color:#8a90a0;font-size:12.5px"><b>Esc</b> — встроенное меню эмулятора (там же можно менять
+       разрешение и раскладку прямо во время игры).<br>Управление в игре: стрелки, <code>Enter</code> — OK,
        <code>F1</code>/<code>F2</code> — софт-клавиши, цифры — клавиатура телефона.</p>
     <div class="row">
       <button class="btn" onclick="document.getElementById('modal').classList.remove('on')">Закрыть</button>
@@ -1101,6 +1218,8 @@ try{
   window.libmedia = new LibMedia();
   log('звук подключён', 'ok');
 }catch(e){ log('звук недоступен: '+e.message, 'wr'); }
+
+document.querySelectorAll('.btn').forEach(b => b.addEventListener('click', () => beep('ui')));
 
 /* boot log */
 log('сцена готова', 'ok');
