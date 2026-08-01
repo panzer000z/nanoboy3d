@@ -1065,11 +1065,12 @@ function frontView(){
   frontMode = true;
   const fov = camera.fov*Math.PI/180;
   const land = Math.abs(deviceRotTarget) > 0.1;
-  const needH = land ? 7.4 : 8.6, needW = land ? 11.6 : 7.0;
+  const needH = land ? 8.8 : 8.6, needW = land ? 13.4 : 7.0;
+  const cy   = land ? 0.15 : 0.85;
   const dh = (needH/2)/Math.tan(fov/2);                     // vertical fit
   const dw = (needW/2)/(Math.tan(fov/2)*camera.aspect);     // horizontal fit
-  const d = Math.min(Math.max(dh, dw), 20);
-  flyTo(new THREE.Vector3(0, 0.85, d), new THREE.Vector3(0, 0.85, 0));
+  const d = Math.min(Math.max(dh, dw), 24);
+  flyTo(new THREE.Vector3(0, cy, d), new THREE.Vector3(0, cy, 0));
 }
 
 /* ============================================================
