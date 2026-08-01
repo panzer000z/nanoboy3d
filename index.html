@@ -97,6 +97,25 @@
     border-radius:3px;background:#000;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
   #emuWrap.on{display:block}
   #emuWrap iframe{width:100%;height:100%;border:0;display:block;background:#000}
+  /* ---------- on-screen keypad (touch + accessibility) ---------- */
+  #pad{position:absolute;left:50%;transform:translateX(-50%);bottom:72px;z-index:8;
+    display:none;gap:14px;align-items:flex-end;
+    background:rgba(20,22,29,.86);backdrop-filter:blur(14px);
+    border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  #pad.on{display:flex}
+  .pk{font-family:'Chivo Mono',monospace;font-size:12px;font-weight:600;color:var(--ink);
+    background:#252a35;border:1px solid #39404f;border-radius:8px;cursor:pointer;
+    width:36px;height:32px;display:grid;place-items:center;user-select:none;
+    -webkit-tap-highlight-color:transparent;transition:.08s}
+  .pk:hover{background:#2f3542}
+  .pk.act{background:var(--acc);border-color:var(--acc);transform:scale(.94)}
+  .pk.ok{background:#7a1f31;border-color:#a3304a}
+  .dpad{display:grid;grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,32px);gap:4px}
+  .dpad .u{grid-area:1/2} .dpad .l{grid-area:2/1} .dpad .o{grid-area:2/2}
+  .dpad .r{grid-area:2/3} .dpad .d{grid-area:3/2}
+  .nums{display:grid;grid-template-columns:repeat(3,36px);gap:4px}
+  .padlbl{font-family:'Chivo Mono',monospace;font-size:9px;color:var(--dim2);
+    text-align:center;margin-top:5px;letter-spacing:.1em}
   #emuNote{position:absolute;left:50%;transform:translateX(-50%);bottom:74px;z-index:9;
     display:none;gap:10px;align-items:center;background:rgba(20,22,29,.95);
     backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
@@ -175,6 +194,23 @@
   <button class="btn" id="btnEject">Извлечь</button>
 </div>
 
+<div id="pad">
+  <div><button class="pk" data-k="F1">L</button><div class="padlbl">SOFT</div></div>
+  <div><div class="dpad">
+    <button class="pk u" data-k="ArrowUp">▲</button>
+    <button class="pk l" data-k="ArrowLeft">◀</button>
+    <button class="pk o ok" data-k="Enter">OK</button>
+    <button class="pk r" data-k="ArrowRight">▶</button>
+    <button class="pk d" data-k="ArrowDown">▼</button>
+  </div><div class="padlbl">D-PAD</div></div>
+  <div><div class="nums">
+    <button class="pk" data-k="Digit1">1</button><button class="pk" data-k="Digit2">2</button><button class="pk" data-k="Digit3">3</button>
+    <button class="pk" data-k="Digit4">4</button><button class="pk" data-k="Digit5">5</button><button class="pk" data-k="Digit6">6</button>
+    <button class="pk" data-k="Digit7">7</button><button class="pk" data-k="Digit8">8</button><button class="pk" data-k="Digit9">9</button>
+    <button class="pk" data-k="NumpadMultiply">*</button><button class="pk" data-k="Digit0">0</button><button class="pk" data-k="NumpadDivide">#</button>
+  </div><div class="padlbl">KEYPAD</div></div>
+  <div><button class="pk" data-k="F2">R</button><div class="padlbl">SOFT</div></div>
+</div>
 <div id="emuNote">
   <span>Java-ядро не стартовало</span>
   <a class="btn primary" id="emuOpen" target="_blank" rel="noopener noreferrer">Открыть ядро в новой вкладке ↗</a>
@@ -761,6 +797,7 @@ async function startCore(){
           async Java_pl_zb3_freej2me_bridge_shell_Shell_setCanvasSize(lib, w, h){
             fitScreen(w, h);
             coreState = 'running';
+            $('#pad').classList.add('on');
             log(`экран игры ${w}×${h}`, 'ok');
           },
           async Java_pl_zb3_freej2me_bridge_shell_Shell_waitForAndDispatchEvents(lib, listener){
@@ -833,11 +870,23 @@ async function startCore(){
 }
 function stopCore(){
   emuOn = false; coreState = 'idle';
+  $('#pad').classList.remove('on');
   screenMode = active ? 'boot' : 'off'; bootT = 2200; ledOff();
   $('#btnPower').textContent = '▶ Играть'; $('#btnPlay2').textContent = '▶ Играть';
 }
 function setEmu(on){ on ? startCore() : stopCore(); }
 function positionEmu(){}
+
+// on-screen keypad -> core
+document.querySelectorAll('#pad .pk').forEach(b => {
+  const k = b.dataset.k;
+  const dn = e => { e.preventDefault(); b.classList.add('act'); queueKey(k, true); };
+  const up = e => { e.preventDefault(); b.classList.remove('act'); queueKey(k, false); };
+  b.addEventListener('pointerdown', dn);
+  b.addEventListener('pointerup', up);
+  b.addEventListener('pointerleave', up);
+  b.addEventListener('pointercancel', up);
+});
 
 // physical keyboard -> core
 addEventListener('keydown', e => { if(codeMap[e.code]){ queueKey(e.code, true);  e.preventDefault(); } });
