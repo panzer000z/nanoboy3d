@@ -98,7 +98,7 @@
   #emuWrap.on{display:block}
   #emuWrap iframe{width:100%;height:100%;border:0;display:block;background:#000}
   /* ---------- on-screen keypad (touch + accessibility) ---------- */
-  #pad{position:absolute;left:50%;transform:translateX(-50%);bottom:72px;z-index:8;
+  #pad{position:absolute;left:18px;bottom:72px;z-index:8;
     display:none;gap:14px;align-items:flex-end;
     background:rgba(20,22,29,.86);backdrop-filter:blur(14px);
     border:1px solid var(--line);border-radius:14px;padding:10px 12px}
@@ -143,6 +143,7 @@
   #loading.gone{opacity:0;pointer-events:none}
 
   @media (max-width:1100px){ #side{display:none} }
+  @media (max-width:1000px){ #pad{left:50%;transform:translateX(-50%);bottom:66px} }
   @media (max-width:860px){
     #shelf{display:none}
     #bottom{flex-wrap:wrap;justify-content:center;max-width:calc(100% - 20px)}
