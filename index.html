@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NANOBOY 3D — J2ME картридж-консоль</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@300;400;600;700&family=Archivo:wght@400;600;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0c10; --panel:#14161d; --line:#252932;
+    --ink:#e8eaf0; --dim:#8a90a0; --dim2:#5b6172;
+    --acc:#ff4d6d; --acc2:#22d3a7; --warn:#ffc857;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+    font-family:Archivo,system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #app{position:fixed;inset:0}
+  canvas.three{display:block;width:100%;height:100%;touch-action:none}
+
+  /* ---------- HUD ---------- */
+  .hud{position:absolute;pointer-events:none;z-index:5}
+  .hud > *{pointer-events:auto}
+
+  #topbar{top:0;left:0;right:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:8px;
+    padding:12px 14px;background:linear-gradient(180deg,rgba(11,12,16,.94),rgba(11,12,16,0))}
+  .brand{font-weight:900;letter-spacing:-.02em;font-size:17px;display:flex;align-items:center;gap:9px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--acc);box-shadow:0 0 14px var(--acc)}
+  .brand small{font-family:'Chivo Mono',monospace;font-weight:400;color:var(--dim2);
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+  .spacer{flex:1}
+
+  .btn{font-family:'Chivo Mono',monospace;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink);background:#1b1e27;border:1px solid var(--line);border-radius:9px;
+    padding:9px 14px;cursor:pointer;transition:.16s;white-space:nowrap}
+  .btn:hover{background:#232733;border-color:#3a4050;transform:translateY(-1px)}
+  .btn.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
+  .btn.primary:hover{background:#ff6480;box-shadow:0 8px 26px rgba(255,77,109,.32)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+  /* ---------- left: cartridge shelf ---------- */
+  #shelf{left:18px;top:74px;width:246px;max-height:calc(100% - 200px);
+    background:rgba(20,22,29,.82);backdrop-filter:blur(14px);
+    border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+  .shelf-h{padding:12px 14px;border-bottom:1px solid var(--line);
+    font-family:'Chivo Mono',monospace;font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between;align-items:center}
+  #cartList{overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:7px;min-height:60px}
+  #cartList::-webkit-scrollbar{width:6px}
+  #cartList::-webkit-scrollbar-thumb{background:#2b303c;border-radius:3px}
+  .cart{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;cursor:pointer;
+    border:1px solid transparent;transition:.14s;background:#171a22}
+  .cart:hover{background:#1e222c;border-color:#333947}
+  .cart.on{border-color:var(--acc);background:rgba(255,77,109,.10)}
+  .cart img{width:34px;height:34px;border-radius:7px;object-fit:contain;background:#0c0e13;
+    image-rendering:pixelated;flex:none}
+  .cart .nm{font-size:12.5px;font-weight:600;line-height:1.25;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .cart .mt{font-family:'Chivo Mono',monospace;font-size:9.5px;color:var(--dim2);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty{padding:18px 12px;text-align:center;color:var(--dim2);font-size:12px;line-height:1.5}
+
+  /* ---------- right: info ---------- */
+  #side{right:18px;top:74px;width:262px;display:flex;flex-direction:column;gap:10px}
+  .card{background:rgba(20,22,29,.82);backdrop-filter:blur(14px);
+    border:1px solid var(--line);border-radius:14px;padding:13px 14px}
+  .card h4{margin:0 0 9px;font-family:'Chivo Mono',monospace;font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dim);font-weight:400}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0}
+  .kv b{font-weight:600;color:var(--dim);font-family:'Chivo Mono',monospace;font-size:10.5px}
+  .kv span{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:62%}
+  #log{font-family:'Chivo Mono',monospace;font-size:10.5px;line-height:1.55;color:var(--dim);
+    max-height:150px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+  #log::-webkit-scrollbar{width:5px}
+  #log::-webkit-scrollbar-thumb{background:#2b303c;border-radius:3px}
+  #log .ok{color:var(--acc2)} #log .er{color:var(--acc)} #log .wr{color:var(--warn)}
+
+  /* ---------- bottom bar ---------- */
+  #bottom{left:50%;transform:translateX(-50%);bottom:16px;display:flex;gap:8px;align-items:center;
+    background:rgba(20,22,29,.86);backdrop-filter:blur(14px);border:1px solid var(--line);
+    border-radius:13px;padding:8px}
+  .hint{font-family:'Chivo Mono',monospace;font-size:10px;color:var(--dim2);
+    letter-spacing:.05em;padding:0 8px;white-space:nowrap}
+
+  /* ---------- drop zone ---------- */
+  #drop{position:fixed;inset:0;z-index:40;display:none;place-items:center;
+    background:rgba(6,7,10,.86);backdrop-filter:blur(6px)}
+  #drop.on{display:grid}
+  #drop .in{border:2px dashed var(--acc);border-radius:22px;padding:56px 76px;text-align:center}
+  #drop h2{margin:0 0 8px;font-size:26px;font-weight:900;letter-spacing:-.02em}
+  #drop p{margin:0;color:var(--dim);font-family:'Chivo Mono',monospace;font-size:12px}
+
+  /* ---------- emulator overlay (real gameplay) ---------- */
+  #emuWrap{position:absolute;z-index:6;display:none;overflow:hidden;
+    border-radius:3px;background:#000;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+  #emuWrap.on{display:block}
+  #emuWrap iframe{width:100%;height:100%;border:0;display:block;background:#000}
+  #emuNote{position:absolute;left:50%;transform:translateX(-50%);bottom:74px;z-index:9;
+    display:none;gap:10px;align-items:center;background:rgba(20,22,29,.95);
+    backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+  #emuNote span{font-family:'Chivo Mono',monospace;font-size:10.5px;color:var(--warn);
+    letter-spacing:.05em;padding-left:4px}
+  #emuNote a{text-decoration:none}
+
+  /* ---------- modal ---------- */
+  #modal{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:rgba(6,7,10,.8);
+    backdrop-filter:blur(8px);padding:20px}
+  #modal.on{display:grid}
+  .sheet{max-width:640px;width:100%;background:var(--panel);border:1px solid var(--line);
+    border-radius:18px;padding:26px 28px;max-height:86vh;overflow-y:auto}
+  .sheet h3{margin:0 0 6px;font-size:21px;font-weight:900;letter-spacing:-.02em}
+  .sheet p{color:var(--dim);font-size:13.5px;line-height:1.65;margin:0 0 12px}
+  .sheet ol{color:var(--dim);font-size:13.5px;line-height:1.75;padding-left:20px;margin:0 0 14px}
+  .sheet code{font-family:'Chivo Mono',monospace;font-size:12px;background:#0d0f14;
+    border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--acc2)}
+  .sheet a{color:var(--acc2)}
+  .row{display:flex;gap:9px;flex-wrap:wrap;margin-top:6px}
+
+  #loading{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:var(--bg);
+    transition:opacity .5s;font-family:'Chivo Mono',monospace;font-size:12px;color:var(--dim2);
+    letter-spacing:.16em;text-transform:uppercase}
+  #loading.gone{opacity:0;pointer-events:none}
+
+  @media (max-width:1100px){ #side{display:none} }
+  @media (max-width:860px){
+    #shelf{display:none}
+    #bottom{flex-wrap:wrap;justify-content:center;max-width:calc(100% - 20px)}
+    .brand small{display:none}
+    .brand{font-size:15px}
+    .btn{padding:8px 10px;font-size:10.5px}
+    .hint{display:none}
+  }
+  @media (max-width:560px){ .brand{display:none} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="loading">Загрузка 3D-сцены…</div>
+
+<div class="hud" id="topbar">
+  <div class="brand"><span class="dot"></span>NANOBOY 3D<small>J2ME cartridge system</small></div>
+  <div class="spacer"></div>
+  <button class="btn primary" id="btnImport">＋ Картридж .jar</button>
+  <button class="btn" id="btnPower">▶ Играть</button>
+  <button class="btn ghost" id="btnHelp">?</button>
+</div>
+
+<div class="hud" id="shelf">
+  <div class="shelf-h"><span>Картриджи</span><span id="cartCount">0</span></div>
+  <div id="cartList"><div class="empty">Перетащи сюда <b>.jar</b> с компьютера — он станет 3D-картриджем.</div></div>
+</div>
+
+<div class="hud" id="side">
+  <div class="card">
+    <h4>Картридж</h4>
+    <div class="kv"><b>NAME</b><span id="iName">—</span></div>
+    <div class="kv"><b>VENDOR</b><span id="iVendor">—</span></div>
+    <div class="kv"><b>MIDLET</b><span id="iClass">—</span></div>
+    <div class="kv"><b>PROFILE</b><span id="iProfile">—</span></div>
+    <div class="kv"><b>SIZE</b><span id="iSize">—</span></div>
+  </div>
+  <div class="card">
+    <h4>Ядро эмулятора</h4>
+    <div id="log"></div>
+  </div>
+</div>
+
+<div class="hud" id="bottom">
+  <span class="hint">ЛКМ — вращать · колесо — зум · кнопки на корпусе кликабельны</span>
+  <button class="btn primary" id="btnPlay2">▶ Играть</button>
+  <button class="btn" id="btnFront">Вид на экран</button>
+  <button class="btn" id="btnEject">Извлечь</button>
+</div>
+
+<div id="emuNote">
+  <span>Java-ядро не стартовало</span>
+  <a class="btn primary" id="emuOpen" target="_blank" rel="noopener noreferrer">Открыть ядро в новой вкладке ↗</a>
+</div>
+
+<div id="drop"><div class="in"><h2>Отпусти .jar</h2><p>MIDP / J2ME игра станет картриджем</p></div></div>
+
+<div id="modal"><div class="sheet" id="sheet"></div></div>
+
+<input type="file" id="file" accept=".jar,.jad,application/java-archive" multiple hidden>
+
+<script src="https://cjrtnc.leaningtech.com/20260317_2978/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { LibMedia } from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libmedia/libmedia.js';
+import { LibMidi, createUnlockingAudioContext } from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libmidi/libmidi.js';
+import { codeMap, KeyRepeatManager } from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/src/key.js';
+import { EventQueue } from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/src/eventqueue.js';
+import canvasFontNatives from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libjs/libcanvasfont.js';
+import canvasGraphicsNatives from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libjs/libcanvasgraphics.js';
+import gles2Natives from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libjs/libgles2.js';
+import jsReferenceNatives from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libjs/libjsreference.js';
+import mediaBridgeNatives from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libjs/libmediabridge.js';
+import midiBridgeNatives from 'https://cdn.jsdelivr.net/gh/zb3/freej2me-web@main/web/libjs/libmidibridge.js';
+
+/* ============================================================
+   0. helpers
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const logEl = $('#log');
+function log(msg, cls){
+  const t = new Date().toLocaleTimeString('ru-RU',{hour12:false});
+  const d = document.createElement('div');
+  if(cls) d.className = cls;
+  d.textContent = `${t}  ${msg}`;
+  logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const easeInOut=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+
+/* ============================================================
+   1. THREE scene
+   ============================================================ */
+const app = $('#app');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b0c10');
+scene.fog = new THREE.Fog('#0b0c10', 34, 70);
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, .1, 200);
+camera.position.set(0, 1.5, 20.5);
+
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.06;
+renderer.domElement.className = 'three';
+app.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = .075;
+controls.minDistance = 9; controls.maxDistance = 40;
+controls.minPolarAngle = .18; controls.maxPolarAngle = Math.PI*.86;
+controls.target.set(0, .75, 0);
+
+/* ---- lights ---- */
+scene.add(new THREE.HemisphereLight('#cfd9f2', '#15171d', .78));
+const key = new THREE.DirectionalLight('#fff7ee', 2.15);
+key.position.set(6, 11, 8); key.castShadow = true;
+key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.near=1; key.shadow.camera.far=40;
+key.shadow.camera.left=-12; key.shadow.camera.right=12;
+key.shadow.camera.top=12; key.shadow.camera.bottom=-12;
+key.shadow.bias = -0.0012; key.shadow.normalBias = .022;
+scene.add(key);
+const rim = new THREE.DirectionalLight('#ff5a78', .62); rim.position.set(-9,3.5,-7); scene.add(rim);
+const fill = new THREE.DirectionalLight('#7d96ff', .55); fill.position.set(-6,4,10); scene.add(fill);
+
+/* ---- floor ---- */
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(30, 72),
+  new THREE.MeshStandardMaterial({color:'#0e1016', roughness:.88, metalness:.06})
+);
+floor.rotation.x = -Math.PI/2; floor.position.y = -5.35; floor.receiveShadow = true;
+scene.add(floor);
+
+/* ============================================================
+   2. console model
+   ============================================================ */
+function roundedRectShape(w,h,r){
+  const s = new THREE.Shape(); const x=-w/2, y=-h/2;
+  s.moveTo(x+r, y);
+  s.lineTo(x+w-r, y);      s.quadraticCurveTo(x+w, y, x+w, y+r);
+  s.lineTo(x+w, y+h-r);    s.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  s.lineTo(x+r, y+h);      s.quadraticCurveTo(x, y+h, x, y+h-r);
+  s.lineTo(x, y+r);        s.quadraticCurveTo(x, y, x+r, y);
+  return s;
+}
+function slab(w,h,d,r,mat,bevel=.06){
+  const g = new THREE.ExtrudeGeometry(roundedRectShape(w,h,r), {
+    depth:d-bevel*2, bevelEnabled:true, bevelSize:bevel, bevelThickness:bevel,
+    bevelSegments:4, curveSegments:18
+  });
+  g.center();
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+
+const MAT = {
+  shell:  new THREE.MeshStandardMaterial({color:'#d9d5ca', roughness:.55, metalness:.02}),
+  shellDk:new THREE.MeshStandardMaterial({color:'#b6b2a7', roughness:.62, metalness:.02}),
+  bezel:  new THREE.MeshStandardMaterial({color:'#20222a', roughness:.42, metalness:.14}),
+  glass:  new THREE.MeshPhysicalMaterial({color:'#0a0d0a', roughness:.14, metalness:0,
+            clearcoat:1, clearcoatRoughness:.06, transmission:0, reflectivity:.5}),
+  dark:   new THREE.MeshStandardMaterial({color:'#2a2d36', roughness:.5,  metalness:.1}),
+  red:    new THREE.MeshStandardMaterial({color:'#d8365a', roughness:.36, metalness:.06}),
+  gray:   new THREE.MeshStandardMaterial({color:'#8f8d86', roughness:.55, metalness:.05}),
+  cartA:  new THREE.MeshStandardMaterial({color:'#4b4f5c', roughness:.62, metalness:.06}),
+  led:    new THREE.MeshStandardMaterial({color:'#3a1218', roughness:.3, emissive:'#000000'}),
+};
+
+const consoleGroup = new THREE.Group();
+scene.add(consoleGroup);
+
+const BW = 6.4, BH = 10.2, BD = 1.5;           // body
+const body = slab(BW, BH, BD, .85, MAT.shell, .09);
+consoleGroup.add(body);
+
+// lower rounded "chin"
+const chin = slab(BW*.995, 3.0, BD*.99, 1.35, MAT.shell, .08);
+chin.position.set(0, -BH/2 + 1.5, 0);
+consoleGroup.add(chin);
+
+// screen bezel
+const bezel = slab(4.35, 4.55, .30, .30, MAT.bezel, .04);
+bezel.position.set(0, 2.30, BD/2 - .02);
+consoleGroup.add(bezel);
+
+// ---- the actual screen (canvas texture) ----
+const SCR_W = 240, SCR_H = 320;
+const scrCanvas = document.createElement('canvas');
+scrCanvas.width = SCR_W; scrCanvas.height = SCR_H;
+const sctx = scrCanvas.getContext('2d', {willReadFrequently:false});
+let scrTex = new THREE.CanvasTexture(scrCanvas);
+scrTex.colorSpace = THREE.SRGBColorSpace;
+scrTex.magFilter = THREE.NearestFilter;
+scrTex.minFilter = THREE.LinearMipmapLinearFilter;
+
+const SCREEN_W = 3.15, SCREEN_H = 3.55;
+const screenMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(SCREEN_W, SCREEN_H),
+  new THREE.MeshBasicMaterial({map:scrTex})
+);
+screenMesh.position.set(0, 2.42, BD/2 + .16);
+consoleGroup.add(screenMesh);
+
+// glass sheen over screen
+const glass = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN_W+.1, SCREEN_H+.1),
+  new THREE.MeshPhysicalMaterial({color:'#ffffff', transparent:true, opacity:.045,
+    roughness:.08, metalness:0, clearcoat:1}));
+glass.position.set(0, 2.42, BD/2 + .175);
+consoleGroup.add(glass);
+
+// power LED
+const led = new THREE.Mesh(new THREE.CircleGeometry(.085, 24), MAT.led);
+led.position.set(-1.88, 2.34, BD/2 + .16);
+consoleGroup.add(led);
+
+// brand text plate
+(function(){
+  const c=document.createElement('canvas'); c.width=512;c.height=96;
+  const x=c.getContext('2d');
+  x.fillStyle='#d9d5ca'; x.fillRect(0,0,512,96);
+  x.fillStyle='#4a4d57'; x.font='800 44px Archivo, sans-serif'; x.textBaseline='middle';
+  x.fillText('NANOBOY', 12, 50);
+  x.fillStyle='#d8365a'; x.font='700 20px Chivo Mono, monospace';
+  x.fillText('3D', 268, 54);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace;
+  const p=new THREE.Mesh(new THREE.PlaneGeometry(2.3,.43),
+    new THREE.MeshStandardMaterial({map:t, roughness:.55}));
+  p.position.set(-1.55,-.28,BD/2+.005); consoleGroup.add(p);
+})();
+
+/* ---- controls: d-pad ---- */
+const pads = [];
+const dpadG = new THREE.Group();
+dpadG.position.set(-1.95, -1.35, BD/2 + .02);
+consoleGroup.add(dpadG);
+const dpadBase = new THREE.Mesh(new THREE.CircleGeometry(.86, 32), MAT.shellDk);
+dpadBase.position.z = -.005; dpadG.add(dpadBase);
+
+function dpadArm(name, x, y, w, h, code){
+  const m = slab(w, h, .30, .09, MAT.dark, .03);
+  m.position.set(x, y, .12);
+  m.userData = {btn:name, code, home:m.position.clone(), press:.10};
+  dpadG.add(m); pads.push(m); return m;
+}
+dpadArm('UP',    0,  .40, .52, .86, 'ArrowUp');
+dpadArm('DOWN',  0, -.40, .52, .86, 'ArrowDown');
+dpadArm('LEFT', -.40, 0,  .86, .52, 'ArrowLeft');
+dpadArm('RIGHT', .40, 0,  .86, .52, 'ArrowRight');
+const dcen = new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.32,20), MAT.dark);
+dcen.rotation.x = Math.PI/2; dcen.position.set(0,0,.13);
+dcen.userData={btn:'FIRE', code:'Enter', home:dcen.position.clone(), press:.09};
+dpadG.add(dcen); pads.push(dcen);
+
+/* ---- A / B ---- */
+function roundBtn(name, x, y, r, code, mat){
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r*.94, .34, 32), mat);
+  m.rotation.x = Math.PI/2;
+  m.position.set(x, y, BD/2 + .13);
+  m.castShadow = true;
+  m.userData = {btn:name, code, home:m.position.clone(), press:.11};
+  consoleGroup.add(m); pads.push(m); return m;
+}
+roundBtn('A', 2.32, -1.05, .46, 'Enter', MAT.red);
+roundBtn('B', 1.32, -1.65, .46, 'Digit7', MAT.red);
+
+/* ---- soft keys + start/select ---- */
+function pill(name, x, y, code, label){
+  const m = slab(.95, .28, .26, .14, MAT.gray, .03);
+  m.position.set(x, y, BD/2 + .04);
+  m.rotation.z = -0.22;
+  m.userData = {btn:name, code, home:m.position.clone(), press:.07};
+  consoleGroup.add(m); pads.push(m);
+  return m;
+}
+pill('SELECT', -.75, -2.85, 'F1');
+pill('START',   .75, -2.85, 'F2');
+// left/right soft keys near the screen
+function softKey(name,x,y,code){
+  const m = slab(.8,.30,.26,.13,MAT.gray,.03);
+  m.position.set(x,y,BD/2+.04);
+  m.userData={btn:name,code,home:m.position.clone(),press:.07};
+  consoleGroup.add(m); pads.push(m);
+}
+softKey('L', -2.10, -.02, 'F1');
+softKey('R',  2.10, -.02, 'F2');
+
+/* ---- speaker holes ---- */
+for(let i=0;i<6;i++) for(let j=0;j<3;j++){
+  const h = new THREE.Mesh(new THREE.CircleGeometry(.055,12),
+    new THREE.MeshStandardMaterial({color:'#6e6c66', roughness:.9}));
+  h.position.set(2.05 + j*.20 - i*.09, -2.55 + i*.20, BD/2+.005);
+  h.rotation.z = -.5;
+  consoleGroup.add(h);
+}
+
+/* ---- cartridge slot (top, back side) ---- */
+const slot = new THREE.Mesh(new THREE.BoxGeometry(3.5, .34, .95),
+  new THREE.MeshStandardMaterial({color:'#15171d', roughness:.85}));
+slot.position.set(0, BH/2 - .18, -.12);
+consoleGroup.add(slot);
+const SLOT_Y = BH/2 - .30, SLOT_Z = -.12;
+
+/* ============================================================
+   3. cartridges
+   ============================================================ */
+const CART_W = 3.15, CART_H = 2.7, CART_D = .52;
+const cartridges = [];      // {data, mesh, el}
+let active = null;          // inserted cartridge
+let shelfIndex = 0;
+
+function makeLabelTexture(info){
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+  const x = c.getContext('2d');
+  const hue = [...info.name].reduce((a,ch)=>a+ch.charCodeAt(0),0) % 360;
+  const g = x.createLinearGradient(0,0,512,512);
+  g.addColorStop(0, `hsl(${hue} 46% 30%)`);
+  g.addColorStop(1, `hsl(${(hue+52)%360} 52% 16%)`);
+  x.fillStyle = g; x.fillRect(0,0,512,512);
+  // border
+  x.strokeStyle = 'rgba(255,255,255,.20)'; x.lineWidth = 8;
+  x.strokeRect(16,16,480,480);
+  // icon
+  if(info.iconImg){
+    const s = 190, ix = (512-s)/2, iy = 74;
+    x.save(); x.imageSmoothingEnabled = false;
+    x.fillStyle='rgba(0,0,0,.30)'; x.fillRect(ix-10, iy-10, s+20, s+20);
+    x.drawImage(info.iconImg, ix, iy, s, s); x.restore();
+  }
+  // name
+  x.fillStyle = '#fff'; x.textAlign = 'center';
+  const words = info.name.split(/[\s_\-]+/).filter(Boolean);
+  const lines = []; let cur = '';
+  x.font = '800 40px Archivo, sans-serif';
+  for(const w of words){
+    const t = cur ? cur+' '+w : w;
+    if(x.measureText(t).width > 430 && cur){ lines.push(cur); cur = w; } else cur = t;
+  }
+  if(cur) lines.push(cur);
+  const startY = 320;
+  lines.slice(0,3).forEach((l,i)=> x.fillText(l, 256, startY + i*46));
+  // footer
+  x.font = '400 22px Chivo Mono, monospace';
+  x.fillStyle = 'rgba(255,255,255,.55)';
+  x.fillText((info.vendor||'UNKNOWN').slice(0,26).toUpperCase(), 256, 470);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function buildCartMesh(info){
+  const g = new THREE.Group();
+  const shell = slab(CART_W, CART_H, CART_D, .28, MAT.cartA, .05);
+  g.add(shell);
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(CART_W*.84, CART_H*.66),
+    new THREE.MeshStandardMaterial({map: makeLabelTexture(info), roughness:.7}));
+  lab.position.set(0, .22, CART_D/2 + .008);
+  g.add(lab);
+  // connector
+  const con = new THREE.Mesh(new THREE.BoxGeometry(CART_W*.62, .42, CART_D*.5),
+    new THREE.MeshStandardMaterial({color:'#c8a13c', roughness:.35, metalness:.75}));
+  con.position.set(0, -CART_H/2 + .16, 0);
+  g.add(con);
+  // grip ridges
+  for(let i=0;i<5;i++){
+    const r = new THREE.Mesh(new THREE.BoxGeometry(CART_W*.9, .06, .05),
+      new THREE.MeshStandardMaterial({color:'#3b3f4a', roughness:.8}));
+    r.position.set(0, CART_H/2 - .18 - i*.13, CART_D/2);
+    g.add(r);
+  }
+  g.traverse(o=>{ if(o.isMesh){o.castShadow=true; o.receiveShadow=true;} });
+  return g;
+}
+
+function shelfSlotPos(i){ return new THREE.Vector3(-6.8, 2.8 - i*1.05, -1.0); }
+
+function addCartridge(info){
+  const mesh = buildCartMesh(info);
+  const p = shelfSlotPos(shelfIndex++);
+  mesh.position.copy(p);
+  mesh.rotation.set(-.12, .55, .04);
+  mesh.scale.setScalar(.46);
+  scene.add(mesh);
+  const rec = {info, mesh, state:'shelf'};
+  cartridges.push(rec);
+  mesh.userData.cart = rec;
+  renderShelf();
+  return rec;
+}
+
+/* insert / eject animation */
+let anim = null;
+function insertCartridge(rec){
+  if(active === rec) return;
+  if(active) { ejectCartridge(true); }
+  active = rec;
+  rec.state = 'inserting';
+  const from = {p:rec.mesh.position.clone(), r:rec.mesh.rotation.clone(), s:rec.mesh.scale.x};
+  const mid  = new THREE.Vector3(0, SLOT_Y + 2.3, SLOT_Z);
+  const to   = new THREE.Vector3(0, SLOT_Y + 0.60, SLOT_Z);
+  anim = {t:0, dur:1150, from, mid, to, rec, mode:'in'};
+  log(`картридж «${rec.info.name}» → слот`, 'ok');
+  renderShelf(); showInfo(rec.info);
+  bootScreen(rec.info);
+}
+function ejectCartridge(silent){
+  if(!active) return;
+  const rec = active; active = null; rec.state='shelf';
+  const idx = cartridges.indexOf(rec);
+  const to = shelfSlotPos(idx);
+  anim = {t:0, dur:850, from:{p:rec.mesh.position.clone(), r:rec.mesh.rotation.clone(), s:rec.mesh.scale.x},
+          mid:new THREE.Vector3(0, SLOT_Y+2.6, SLOT_Z), to, rec, mode:'out'};
+  if(!silent) log('картридж извлечён');
+  renderShelf();
+  powerOff();
+}
+function stepAnim(dt){
+  if(!anim) return;
+  anim.t += dt;
+  const k = clamp(anim.t/anim.dur, 0, 1), e = easeInOut(k);
+  const {from, mid, to, rec} = anim;
+  const a = new THREE.Vector3().lerpVectors(from.p, mid, easeInOut(clamp(k*2,0,1)));
+  const b = new THREE.Vector3().lerpVectors(mid, to, easeInOut(clamp(k*2-1,0,1)));
+  rec.mesh.position.copy(k<.5 ? a : b);
+  const targS = anim.mode==='in' ? 1 : .46;
+  const s = from.s + (targS-from.s)*e;
+  rec.mesh.scale.setScalar(s);
+  rec.mesh.rotation.x = from.r.x*(1-e) + (anim.mode==='in'?0:-.12)*e;
+  rec.mesh.rotation.y = from.r.y*(1-e) + (anim.mode==='in'?0:.55)*e;
+  rec.mesh.rotation.z = from.r.z*(1-e);
+  if(k>=1){ if(anim.mode==='in') rec.state='in'; anim=null; }
+}
+
+/* ============================================================
+   4. JAR parsing  → cartridge
+   ============================================================ */
+async function readJar(file){
+  const zip = await JSZip.loadAsync(file);
+  let mf = '';
+  const mfFile = zip.file(/^META-INF\/MANIFEST\.MF$/i)[0];
+  if(mfFile) mf = await mfFile.async('string');
+  // unfold continuation lines
+  mf = mf.replace(/\r\n/g,'\n').replace(/\n[ \t]/g,'');
+  const get = k => {
+    const m = mf.match(new RegExp('^'+k+':\\s*(.*)$','mi'));
+    return m ? m[1].trim() : '';
+  };
+  const midlet1 = get('MIDlet-1');
+  let name = get('MIDlet-Name'), iconPath = get('MIDlet-Icon'), cls = '';
+  if(midlet1){
+    const parts = midlet1.split(',').map(s=>s.trim());
+    if(parts[0]) name = name || parts[0];
+    if(parts[1]) iconPath = iconPath || parts[1];
+    if(parts[2]) cls = parts[2];
+  }
+  name = name || file.name.replace(/\.jar$/i,'');
+  // icon
+  let iconImg = null, iconURL = '';
+  const tryPaths = [iconPath, iconPath?.replace(/^\//,''), '/icon.png','icon.png'].filter(Boolean);
+  for(const p of tryPaths){
+    const f = zip.file(p.replace(/^\//,''));
+    if(f){
+      try{
+        const b64 = await f.async('base64');
+        iconURL = 'data:image/png;base64,'+b64;
+        iconImg = await new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=iconURL; });
+        if(iconImg) break;
+      }catch(e){}
+    }
+  }
+  if(!iconImg){
+    // any png in the jar as a fallback
+    const pngs = zip.file(/\.png$/i);
+    if(pngs.length){
+      try{
+        const b64 = await pngs[0].async('base64');
+        iconURL='data:image/png;base64,'+b64;
+        iconImg = await new Promise(res=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=iconURL;});
+      }catch(e){}
+    }
+  }
+  // resolution guess
+  let res = '240x320';
+  const rm = file.name.match(/(\d{2,4})\s*[xX*]\s*(\d{2,4})/);
+  if(rm) res = `${rm[1]}x${rm[2]}`;
+  return {
+    file, name, vendor:get('MIDlet-Vendor'), version:get('MIDlet-Version'),
+    cls, profile:get('MicroEdition-Profile')||'MIDP-2.0',
+    config:get('MicroEdition-Configuration')||'CLDC-1.0',
+    size:file.size, iconImg, iconURL, res
+  };
+}
+
+async function handleFiles(list){
+  for(const f of list){
+    if(!/\.(jar|jad)$/i.test(f.name)){ log(`пропущен ${f.name} — не .jar`, 'wr'); continue; }
+    try{
+      log(`читаю ${f.name} …`);
+      const info = await readJar(f);
+      const rec = addCartridge(info);
+      log(`✓ ${info.name} — ${info.profile}/${info.config}`, 'ok');
+      insertCartridge(rec);
+    }catch(e){ log(`ошибка разбора ${f.name}: ${e.message}`, 'er'); }
+  }
+}
+
+/* ============================================================
+   5. screen rendering (boot + idle)
+   ============================================================ */
+let screenMode = 'off', bootT = 0, curInfo = null;
+function bootScreen(info){ curInfo = info; screenMode='boot'; bootT=0; }
+function powerOff(){ screenMode='off'; setEmu(false); ledOff(); }
+function ledOn(){ MAT.led.color.set('#ff3b5c'); MAT.led.emissive.set('#ff2d52'); MAT.led.emissiveIntensity=2.2; }
+function ledOff(){ MAT.led.color.set('#3a1218'); MAT.led.emissive.set('#000000'); }
+
+function drawScreen(dt){
+  const w = SCR_W, h = SCR_H;
+  if(screenMode==='off'){
+    sctx.fillStyle = '#0d1210'; sctx.fillRect(0,0,w,h);
+    const g = sctx.createLinearGradient(0,0,w,h);
+    g.addColorStop(0,'rgba(255,255,255,.045)'); g.addColorStop(.5,'rgba(255,255,255,0)');
+    sctx.fillStyle=g; sctx.fillRect(0,0,w,h);
+    sctx.fillStyle='#1d2b26'; sctx.font='600 13px Chivo Mono, monospace'; sctx.textAlign='center';
+    sctx.fillText('POWER OFF', w/2, h/2);
+    scrTex.needsUpdate = true; return;
+  }
+  if(screenMode==='boot'){
+    bootT += dt;
+    sctx.fillStyle = '#9bbc0f'; sctx.fillRect(0,0,w,h);   // classic DMG green
+    sctx.fillStyle = '#0f380f';
+    const k = clamp(bootT/1400, 0, 1);
+    const y = -60 + easeInOut(k)*(h/2 - 40);
+    if(curInfo?.iconImg){
+      const s = 96; sctx.imageSmoothingEnabled = false;
+      sctx.drawImage(curInfo.iconImg, (w-s)/2, y, s, s);
+    } else {
+      sctx.fillRect(w/2-40, y+20, 80, 56);
+    }
+    sctx.font='700 15px Chivo Mono, monospace'; sctx.textAlign='center';
+    const nm = (curInfo?.name||'').slice(0,20).toUpperCase();
+    if(k>.72) sctx.fillText(nm, w/2, y+140);
+    if(bootT>2100){
+      sctx.font='400 11px Chivo Mono, monospace';
+      sctx.fillText('NANOBOY 3D', w/2, h-56);
+      if(Math.floor(bootT/450)%2===0)
+        sctx.fillText('▶ НАЖМИ НА ЭКРАН', w/2, h-34);
+    }
+    scrTex.needsUpdate = true; return;
+  }
+  if(screenMode==='emu'){
+    if(coreState === 'booting'){
+      sctx.fillStyle='#05070a'; sctx.fillRect(0,0,w,h);
+      sctx.fillStyle='#22d3a7'; sctx.font='600 12px Chivo Mono, monospace'; sctx.textAlign='center';
+      sctx.fillText('ЗАГРУЗКА ЯДРА…', w/2, h/2);
+      const n = Math.floor(performance.now()/300)%4;
+      sctx.fillText('.'.repeat(n), w/2, h/2+18);
+    }
+    scrTex.needsUpdate = true;   // the game paints straight into this canvas
+    return;
+  }
+}
+
+/* ============================================================
+   6. emulator overlay (real J2ME core)
+   ============================================================ */
+/* ---------- FreeJ2ME core, running inside this page ---------- */
+const cheerpjWebRoot = '/app' + location.pathname.replace(/\/[^/]*$/, '');
+const evtQueue = new EventQueue();
+window.evtQueue = evtQueue;
+const keyRepeat = new KeyRepeatManager();
+
+let coreState = 'idle';           // idle | booting | running | failed
+let coreLib = null, emuOn = false;
+
+function queueKey(code, down){
+  if(coreState !== 'running') return;
+  const jk = codeMap[code];
+  if(jk === undefined) return;
+  const symbol = code.startsWith('Digit') ? code.charCodeAt(5) : 0;
+  evtQueue.queueEvent({kind: down ? 'keydown' : 'keyup', args:[jk, symbol, false, false]});
+}
+function queuePointer(kind, x, y){
+  if(coreState !== 'running') return;
+  evtQueue.queueEvent({kind, x:x|0, y:y|0});
+}
+
+function fitScreen(w, h){
+  if(scrCanvas.width !== w || scrCanvas.height !== h){
+    scrCanvas.width = w; scrCanvas.height = h;
+    scrTex.dispose();
+    scrTex = new THREE.CanvasTexture(scrCanvas);
+    scrTex.colorSpace = THREE.SRGBColorSpace;
+    scrTex.magFilter = THREE.NearestFilter;
+    scrTex.minFilter = THREE.LinearMipmapLinearFilter;
+    screenMesh.material.map = scrTex;
+    screenMesh.material.needsUpdate = true;
+  }
+  // keep the game's aspect ratio on the physical screen
+  const want = w/h, have = SCREEN_W/SCREEN_H;
+  screenMesh.scale.x = glass.scale.x = want/have;
+}
+
+async function startCore(){
+  if(coreState === 'running' || coreState === 'booting') return;
+  if(!active){ log('сначала вставь картридж (.jar)', 'wr'); return; }
+  coreState = 'booting';
+  screenMode = 'emu'; ledOn();
+  try{
+    if(typeof cheerpjInit !== 'function') throw new Error('CheerpJ не загрузился');
+    if(!coreLib){
+      log('инициализирую Java-VM…');
+      await cheerpjInit({
+        enableDebug:false,
+        natives:{
+          ...canvasFontNatives, ...canvasGraphicsNatives, ...gles2Natives,
+          ...jsReferenceNatives, ...mediaBridgeNatives, ...midiBridgeNatives,
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_setTitle(lib, t){},
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_setIcon(lib, b){},
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_getScreenCtx(lib){ return sctx; },
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_setCanvasSize(lib, w, h){
+            fitScreen(w, h);
+            coreState = 'running';
+            log(`экран игры ${w}×${h}`, 'ok');
+          },
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_waitForAndDispatchEvents(lib, listener){
+            const KeyEvent = await lib.pl.zb3.freej2me.bridge.shell.KeyEvent;
+            const PointerEvent = await lib.pl.zb3.freej2me.bridge.shell.PointerEvent;
+            const e = await evtQueue.waitForEvent();
+            if(e.kind === 'keydown')            await listener.keyPressed(await new KeyEvent(...e.args));
+            else if(e.kind === 'keyup')         await listener.keyReleased(await new KeyEvent(...e.args));
+            else if(e.kind === 'pointerpressed')await listener.pointerPressed(await new PointerEvent(e.x, e.y));
+            else if(e.kind === 'pointerdragged')await listener.pointerDragged(await new PointerEvent(e.x, e.y));
+            else if(e.kind === 'pointerreleased')await listener.pointerReleased(await new PointerEvent(e.x, e.y));
+            else if(e.kind === 'player-eom')    await listener.playerEOM(e.player);
+            else if(e.kind === 'player-video-frame') await listener.playerVideoFrame(e.player);
+          },
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_restart(lib){ location.reload(); },
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_exit(lib){ stopCore(); },
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_sthop(lib){},
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_say(lib, m){ log('core: '+m); },
+          async Java_pl_zb3_freej2me_bridge_shell_Shell_sayObject(lib, l, o){}
+        }
+      });
+      log('Java-VM готова', 'ok');
+      log('загружаю ядро FreeJ2ME…');
+      const withTimeout = (p, ms) => Promise.race([p,
+        new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), ms))]);
+      try{
+        coreLib = await withTimeout(cheerpjRunLibrary(cheerpjWebRoot + '/freej2me-web.jar'), 45000);
+      }catch(e1){
+        log('прямая загрузка не удалась ('+e1.message+'), пробую резервную', 'wr');
+        const r = await fetch('freej2me-web.jar.b64');
+        if(!r.ok) throw new Error('ядро недоступно: ' + e1.message);
+        const bin = atob((await r.text()).replace(/\s+/g,''));
+        const bytes = new Uint8Array(bin.length);
+        for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+        cheerpOSAddStringFile('/str/freej2me-web.jar', bytes);
+        coreLib = await withTimeout(cheerpjRunLibrary('/str/freej2me-web.jar'), 45000);
+      }
+      log('ядро загружено', 'ok');
+    }
+    // put the cartridge into the emulator filesystem
+    const bytes = new Uint8Array(await active.info.file.arrayBuffer());
+    const LauncherUtil = await coreLib.pl.zb3.freej2me.launcher.LauncherUtil;
+    const JFile = await coreLib.java.io.File;
+    await LauncherUtil.resetTmpDir();
+    const jarFile = await new JFile('/files/_tmp/game.jar');
+    await LauncherUtil.copyJar(new Int8Array(bytes), jarFile);
+    log(`картридж записан (${(bytes.length/1024)|0} KB)`, 'ok');
+
+    const FreeJ2ME = await coreLib.org.recompile.freej2me.FreeJ2ME;
+    emuOn = true;
+    log('запуск игры…', 'ok');
+    FreeJ2ME.main(['jar', '/files/_tmp/game.jar']).catch(async e => {
+      coreState = 'failed';
+      try{ await e.printStackTrace(); }catch(_){}
+      log('игра завершилась с ошибкой', 'er');
+    });
+  }catch(e){
+    coreState = 'failed'; emuOn = false;
+    log('ядро не стартовало: ' + ((e && e.message) || e), 'er');
+    $('#emuNote').style.display = 'flex';
+  }
+}
+function stopCore(){
+  emuOn = false; coreState = 'idle';
+  screenMode = active ? 'boot' : 'off'; bootT = 2200; ledOff();
+  $('#btnPower').textContent = '▶ Играть'; $('#btnPlay2').textContent = '▶ Играть';
+}
+function setEmu(on){ on ? startCore() : stopCore(); }
+function positionEmu(){}
+
+// physical keyboard -> core
+addEventListener('keydown', e => { if(codeMap[e.code]){ queueKey(e.code, true);  e.preventDefault(); } });
+addEventListener('keyup',   e => { if(codeMap[e.code]){ queueKey(e.code, false); e.preventDefault(); } });
+
+/* front view animation */
+let camAnim = null;
+function flyTo(pos, target, dur=900){
+  camAnim = {t:0, dur, fp:camera.position.clone(), tp:pos.clone(),
+             ft:controls.target.clone(), tt:target.clone()};
+}
+function frontView(){
+  frontMode = true;
+  const fov = camera.fov*Math.PI/180;
+  const dh = (8.6/2)/Math.tan(fov/2);                       // vertical fit
+  const dw = (7.0/2)/(Math.tan(fov/2)*camera.aspect);       // horizontal fit
+  const d = Math.min(Math.max(dh, dw), 20);
+  flyTo(new THREE.Vector3(0, 0.85, d), new THREE.Vector3(0, 0.85, 0));
+}
+
+/* ============================================================
+   7. input: raycast on buttons
+   ============================================================ */
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let held = null, screenPointer = null;
+function pick(ev){
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.x = ((ev.clientX-r.left)/r.width)*2-1;
+  ptr.y = -((ev.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(ptr, camera);
+  const hitsB = ray.intersectObjects(pads, false);
+  if(hitsB.length) return {kind:'btn', obj:hitsB[0].object};
+  const hitsS = ray.intersectObject(screenMesh, false);
+  if(hitsS.length) return {kind:'screen', uv:hitsS[0].uv};
+  const hitsC = ray.intersectObjects(cartridges.map(c=>c.mesh), true);
+  if(hitsC.length){
+    let o = hitsC[0].object;
+    while(o && !o.userData.cart) o = o.parent;
+    if(o) return {kind:'cart', rec:o.userData.cart};
+  }
+  return null;
+}
+renderer.domElement.addEventListener('pointerdown', ev=>{
+  const p = pick(ev); if(!p) return;
+  if(p.kind==='btn'){
+    held = p.obj;
+    held.position.z = held.userData.home.z - held.userData.press;
+    sendKey(held.userData.code, true);
+    controls.enabled = false;
+  } else if(p.kind==='screen'){
+    if(coreState === 'running' && p.uv){
+      queuePointer('pointerpressed', p.uv.x*scrCanvas.width, (1-p.uv.y)*scrCanvas.height);
+      screenPointer = p.uv;
+    } else if(!emuOn) togglePower();
+  } else if(p.kind==='cart'){
+    if(p.rec !== active){ insertCartridge(p.rec); }
+    else { showInfo(p.rec.info); }
+  }
+});
+addEventListener('pointerup', ()=>{
+  if(screenPointer){
+    queuePointer('pointerreleased', screenPointer.x*scrCanvas.width, (1-screenPointer.y)*scrCanvas.height);
+    screenPointer = null;
+  }
+  if(held){
+    held.position.copy(held.userData.home);
+    sendKey(held.userData.code, false);
+    held = null;
+  }
+  controls.enabled = true;
+});
+function sendKey(code, down){
+  if(!code) return;
+  queueKey(code, down);
+  if(screenMode==='boot' && down) bootT = Math.max(bootT, 2200);
+}
+
+/* ============================================================
+   8. UI wiring
+   ============================================================ */
+function renderShelf(){
+  const list = $('#cartList');
+  $('#cartCount').textContent = cartridges.length;
+  if(!cartridges.length){
+    list.innerHTML = '<div class="empty">Перетащи сюда <b>.jar</b> с компьютера — он станет 3D-картриджем.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  cartridges.forEach(rec=>{
+    const d = document.createElement('div');
+    d.className = 'cart' + (rec===active?' on':'');
+    d.innerHTML = `<img src="${rec.info.iconURL||''}" alt="">
+      <div><div class="nm">${escapeHtml(rec.info.name)}</div>
+      <div class="mt">${escapeHtml(rec.info.vendor||'—')} · ${(rec.info.size/1024|0)} KB</div></div>`;
+    d.onclick = ()=> insertCartridge(rec);
+    list.appendChild(d);
+  });
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function showInfo(i){
+  $('#iName').textContent = i.name || '—';
+  $('#iVendor').textContent = i.vendor || '—';
+  $('#iClass').textContent = i.cls || '—';
+  $('#iProfile').textContent = `${i.profile} / ${i.config}`;
+  $('#iSize').textContent = `${(i.size/1024|0)} KB · ${i.res}`;
+}
+
+$('#btnImport').onclick = ()=> $('#file').click();
+$('#file').onchange = e => { handleFiles([...e.target.files]); e.target.value=''; };
+$('#btnEject').onclick = ()=> ejectCartridge();
+$('#btnFront').onclick = ()=> frontView();
+function togglePower(){
+  if(emuOn){
+    setEmu(false);
+    screenMode = active ? 'boot' : 'off'; bootT = 2200;
+    $('#btnPower').textContent = '▶ Играть'; $('#btnPlay2').textContent = '▶ Играть';
+    log('питание выключено');
+    return;
+  }
+  if(!cartridges.length) log('картриджа нет — игру можно выбрать прямо в окне экрана', 'wr');
+  frontView();
+  $('#btnPower').textContent = '⏹ Стоп'; $('#btnPlay2').textContent = '⏹ Стоп';
+  log('запускаю Java-ядро…');
+  setTimeout(()=>{ setEmu(true); }, 900);
+}
+$('#btnPower').onclick = togglePower;
+$('#btnPlay2').onclick = togglePower;
+$('#btnHelp').onclick = ()=> openHelp();
+$('#emuOpen').href = 'https://zb3.github.io/freej2me-web/';
+
+/* drag & drop */
+const drop = $('#drop');
+let dragDepth = 0;
+addEventListener('dragenter', e=>{ e.preventDefault(); if(++dragDepth) drop.classList.add('on'); });
+addEventListener('dragover', e=>e.preventDefault());
+addEventListener('dragleave', e=>{ if(--dragDepth<=0){dragDepth=0;drop.classList.remove('on');} });
+addEventListener('drop', e=>{
+  e.preventDefault(); dragDepth=0; drop.classList.remove('on');
+  handleFiles([...(e.dataTransfer?.files||[])]);
+});
+
+/* keyboard → emulator */
+addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ $('#modal').classList.remove('on'); }
+});
+
+function openHelp(){
+  $('#sheet').innerHTML = `
+    <h3>Как это работает</h3>
+    <p>Это настоящая 3D-консоль: её можно вращать мышью, приближать колесом, а кнопки на корпусе
+       физически нажимаются. Картриджи создаются из твоих <code>.jar</code>-файлов —
+       читается <code>META-INF/MANIFEST.MF</code>, оттуда берётся имя, издатель, класс MIDlet
+       и настоящая иконка игры, которая печатается на этикетке картриджа.</p>
+    <h3 style="font-size:16px;margin-top:18px">Запуск игр</h3>
+    <p>Внутри экрана работает открытое ядро <a href="https://github.com/zb3/freej2me-web" target="_blank" rel="noopener noreferrer">FreeJ2ME (CheerpJ)</a> —
+       именно оно исполняет Java-байткод MIDP. Нажми <b>«Включить»</b>, выбери в окне экрана
+       тот же <code>.jar</code>, и игра запустится по-настоящему.</p>
+    <ol>
+      <li>Перетащи <code>.jar</code> в окно → появится 3D-картридж.</li>
+      <li>Нажми <b>«Играть»</b> — ядро загрузится и игра пойдёт прямо на экране консоли.</li>
+      <li>Играй крестовиной и кнопками A/B на корпусе или с клавиатуры.</li>
+    </ol>
+    <p style="color:#8a90a0;font-size:12.5px">Управление в игре: стрелки, <code>Enter</code> — OK,
+       <code>F1</code>/<code>F2</code> — софт-клавиши, цифры — клавиатура телефона.</p>
+    <div class="row">
+      <button class="btn" onclick="document.getElementById('modal').classList.remove('on')">Закрыть</button>
+      <a class="btn" href="https://zb3.github.io/freej2me-web/" target="_blank" rel="noopener noreferrer">Открыть эмулятор отдельно ↗</a>
+    </div>`;
+  $('#modal').classList.add('on');
+}
+$('#modal').onclick = e => { if(e.target.id==='modal') e.currentTarget.classList.remove('on'); };
+
+/* ============================================================
+   9. loop
+   ============================================================ */
+let last = performance.now();
+function tick(now){
+  const dt = Math.min(now-last, 60); last = now;
+  stepAnim(dt);
+  if(camAnim){
+    camAnim.t += dt;
+    const k = clamp(camAnim.t/camAnim.dur,0,1), e = easeInOut(k);
+    camera.position.lerpVectors(camAnim.fp, camAnim.tp, e);
+    controls.target.lerpVectors(camAnim.ft, camAnim.tt, e);
+    if(k>=1) camAnim = null;
+  }
+  // idle float
+  consoleGroup.rotation.y = Math.sin(now/5200)*0.022;
+  consoleGroup.position.y = Math.sin(now/3400)*0.030;
+  drawScreen(dt);
+  controls.update();
+  if(emuOn) positionEmu();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  positionEmu();
+});
+
+/* audio bridges for the core */
+try{
+  window.libmidi = new LibMidi(createUnlockingAudioContext());
+  await window.libmidi.init();
+  window.libmidi.midiPlayer.addEventListener('end-of-media', e =>
+    evtQueue.queueEvent({kind:'player-eom', player:e.target}));
+  window.libmedia = new LibMedia();
+  log('звук подключён', 'ok');
+}catch(e){ log('звук недоступен: '+e.message, 'wr'); }
+
+/* boot log */
+log('сцена готова', 'ok');
+log('ядро: FreeJ2ME + CheerpJ (встроено)');
+log('перетащи .jar чтобы создать картридж');
+setTimeout(()=> $('#loading').classList.add('gone'), 350);
+</script>
+</body>
+</html>
